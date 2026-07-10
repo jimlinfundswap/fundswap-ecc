@@ -5,7 +5,14 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const OBSERVE_RELATIVE_PATH = path.join('skills', 'continuous-learning-v2', 'hooks', 'observe.sh');
+// The claude-home install target namespaces `skills/` under `skills/ecc/`
+// (see scripts/lib/install-targets/claude-home.js), but a source-repo
+// checkout keeps `skills/continuous-learning-v2` unnamespaced. Try the
+// installed layout first, then fall back to the source-repo layout.
+const OBSERVE_RELATIVE_PATHS = [
+  path.join('skills', 'ecc', 'continuous-learning-v2', 'hooks', 'observe.sh'),
+  path.join('skills', 'continuous-learning-v2', 'hooks', 'observe.sh')
+];
 const DEFAULT_TIMEOUT_MS = 9000;
 
 function getPluginRoot(options = {}) {
@@ -97,9 +104,17 @@ function run(raw, options = {}) {
   }
 
   const pluginRoot = getPluginRoot(options);
-  let observePath;
+  let observePath = null;
+  const triedPaths = [];
   try {
-    observePath = resolveTarget(pluginRoot, OBSERVE_RELATIVE_PATH);
+    for (const relativePath of OBSERVE_RELATIVE_PATHS) {
+      const candidate = resolveTarget(pluginRoot, relativePath);
+      triedPaths.push(candidate);
+      if (fs.existsSync(candidate)) {
+        observePath = candidate;
+        break;
+      }
+    }
   } catch (error) {
     return {
       stderr: `[Hook] observe runner path resolution failed: ${error.message}`,
@@ -107,9 +122,9 @@ function run(raw, options = {}) {
     };
   }
 
-  if (!fs.existsSync(observePath)) {
+  if (!observePath) {
     return {
-      stderr: `[Hook] observe script not found: ${observePath}`,
+      stderr: `[Hook] observe script not found: ${triedPaths.join(', ')}`,
       exitCode: 0
     };
   }
@@ -188,7 +203,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  OBSERVE_RELATIVE_PATH,
+  OBSERVE_RELATIVE_PATHS,
   findShellBinary,
   getPhaseFromHookId,
   run,

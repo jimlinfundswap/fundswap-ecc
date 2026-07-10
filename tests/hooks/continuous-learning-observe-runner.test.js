@@ -94,6 +94,22 @@ function writeFakeObserveScript(tempRoot) {
   fs.chmodSync(scriptPath, 0o755);
 }
 
+function writeFakeObserveScriptNamespaced(tempRoot) {
+  const scriptPath = path.join(tempRoot, 'skills', 'ecc', 'continuous-learning-v2', 'hooks', 'observe.sh');
+  fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+  fs.writeFileSync(
+    scriptPath,
+    [
+      '#!/usr/bin/env bash',
+      'input="$(cat)"',
+      'printf "phase=%s input=%s root=%s" "$1" "$input" "${CLAUDE_PLUGIN_ROOT:-}"',
+      ''
+    ].join('\n'),
+    'utf8'
+  );
+  fs.chmodSync(scriptPath, 0o755);
+}
+
 function runWithFlags(tempRoot, hookId, relScriptPath, stdin) {
   return spawnSync(process.execPath, [runWithFlagsPath, hookId, relScriptPath, 'standard,strict'], {
     input: stdin,
@@ -167,6 +183,56 @@ function runTests() {
         assert.strictEqual(output.exitCode, 0, output.stderr);
         assert.strictEqual(output.stdout, `phase=pre input=payload root=${tempRoot}`);
       });
+    });
+  })) passed++; else failed++;
+
+  if (test('observe-runner finds observe.sh under the claude-home ecc namespace (skills/ecc/continuous-learning-v2)', () => {
+    withTempPluginRoot(tempRoot => {
+      writeFakeObserveScriptNamespaced(tempRoot);
+      const env = fs.existsSync('/bin/sh') ? { BASH: '/bin/sh' } : {};
+      withEnv(env, () => {
+        const output = observeRunner.run('payload', {
+          hookId: 'pre:observe',
+          pluginRoot: tempRoot
+        });
+
+        assert.strictEqual(output.exitCode, 0, output.stderr);
+        assert.strictEqual(output.stdout, `phase=pre input=payload root=${tempRoot}`);
+      });
+    });
+  })) passed++; else failed++;
+
+  if (test('observe-runner prefers the namespaced path when both layouts exist', () => {
+    withTempPluginRoot(tempRoot => {
+      writeFakeObserveScriptNamespaced(tempRoot);
+      const unnamespacedPath = path.join(tempRoot, 'skills', 'continuous-learning-v2', 'hooks', 'observe.sh');
+      fs.mkdirSync(path.dirname(unnamespacedPath), { recursive: true });
+      fs.writeFileSync(unnamespacedPath, '#!/usr/bin/env bash\nexit 1\n', 'utf8');
+      fs.chmodSync(unnamespacedPath, 0o755);
+
+      const env = fs.existsSync('/bin/sh') ? { BASH: '/bin/sh' } : {};
+      withEnv(env, () => {
+        const output = observeRunner.run('payload', {
+          hookId: 'pre:observe',
+          pluginRoot: tempRoot
+        });
+
+        assert.strictEqual(output.exitCode, 0, output.stderr);
+        assert.strictEqual(output.stdout, `phase=pre input=payload root=${tempRoot}`);
+      });
+    });
+  })) passed++; else failed++;
+
+  if (test('observe-runner reports both tried paths when neither layout exists', () => {
+    withTempPluginRoot(tempRoot => {
+      const output = observeRunner.run('payload', {
+        hookId: 'pre:observe',
+        pluginRoot: tempRoot
+      });
+
+      assert.strictEqual(output.exitCode, 0);
+      assert.ok(output.stderr.includes(path.join('skills', 'ecc', 'continuous-learning-v2', 'hooks', 'observe.sh')));
+      assert.ok(output.stderr.includes(path.join('skills', 'continuous-learning-v2', 'hooks', 'observe.sh')));
     });
   })) passed++; else failed++;
 
