@@ -1,5 +1,5 @@
 ---
-description: Save current session state to a dated file in ~/.claude/session-data/ so work can be resumed in a future session with full context.
+description: Save current session state to a dated file in ~/.claude/session-data/ (local scratch), and also to ~/fundswap_github/knowledge-wiki/plans/active/ when available (durable, git-tracked, cross-machine handoff) so work can be resumed in a future session with full context.
 ---
 
 # Save Session Command
@@ -46,6 +46,29 @@ Avoid for new files: `A`, `test_id1`, `ABC123de`
 Full valid filename example: `2024-01-15-abc123de-session.tmp`
 
 The legacy filename `YYYY-MM-DD-session.tmp` is still valid, but new session files should prefer the short-id form to avoid same-day collisions.
+
+**This local file is a scratch copy** — `.tmp`, gitignored if inside a repo, machine-specific, and subject to `ECC_SESSION_RETENTION_DAYS` pruning. Keep writing it (other tooling, e.g. `session-manager.js`, expects files here), but it is not the durable handoff.
+
+### Step 3b: Also write the durable copy to knowledge-wiki (when available)
+
+If `~/fundswap_github/knowledge-wiki/plans/active/` exists on this machine, this is the **canonical, git-tracked, cross-machine handoff store** — write a copy there too, not just the local scratch file:
+
+1. Determine the current repo name (git root basename, or nearest project folder name) and a short kebab/plain-language topic for this session
+2. Write `~/fundswap_github/knowledge-wiki/plans/active/YYYY-MM-DD_<repo>_<topic>.md` with frontmatter:
+   ```yaml
+   ---
+   title: <one-line summary>
+   date: YYYY-MM-DD
+   repo: <repo>
+   status: active
+   ---
+   ```
+   followed by the same content as the local session file (all sections from Step 4 below), organized under headings — match the existing style of other files already in that folder (`ls plans/active/ plans/done/` for examples) rather than inventing a new structure each time
+3. If a plan file for this repo+topic already exists in `plans/active/` from earlier in the same body of work, update it in place rather than creating a duplicate dated file
+4. When the work this session covers is fully done (not just this session, the whole tracked effort), move the file from `plans/active/` to `plans/done/` and set `status: done` — do not do this speculatively, only when the user confirms completion
+5. This repo auto-commits/pushes on its own (do not manually run `git add`/`commit`/`push` here unless asked — a background sync process handles it)
+
+If `~/fundswap_github/knowledge-wiki` does not exist on this machine, skip this step — the local file from Step 3 is the only copy.
 
 ### Step 4: Populate the file with all sections below
 

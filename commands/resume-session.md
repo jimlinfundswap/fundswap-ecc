@@ -1,5 +1,5 @@
 ---
-description: Load the most recent session file from ~/.claude/session-data/ and resume work with full context from where the last session ended.
+description: Load the most recent session handoff for the current repo — preferring the durable ~/fundswap_github/knowledge-wiki/plans/active/ store, falling back to local ~/.claude/session-data/ — and resume work with full context from where the last session ended.
 ---
 
 # Resume Session Command
@@ -27,25 +27,30 @@ This command is the counterpart to `/save-session`.
 
 ### Step 1: Find the session file
 
+Two stores exist. **Knowledge-wiki plans is the durable, cross-machine, git-tracked store and is preferred whenever a match exists.** `~/.claude/session-data/` is a local-only scratch store (files are `.tmp`, gitignored if inside a repo, and machine-specific) — treat it as a fallback, not the default source of truth.
+
 If no argument provided:
 
-1. Check `~/.claude/session-data/`
-2. Pick the most recently modified `*-session.tmp` file
-3. If the folder does not exist or has no matching files, tell the user:
+1. **Check knowledge-wiki plans first**, if `~/fundswap_github/knowledge-wiki/plans/active/` exists on this machine:
+   - Determine the current repo name from the working directory (git root basename, or nearest project folder name)
+   - Look for files matching `*_<repo-name>_*.md` in that folder
+   - If one or more match, pick the most recently modified — this is the session file, skip step 2
+2. **Fall back to `~/.claude/session-data/`** if step 1 found nothing (no knowledge-wiki checkout on this machine, or no file tagged for this repo):
+   - Pick the most recently modified `*-session.tmp` file
+3. If neither store has a matching file, tell the user:
    ```
-   No session files found in ~/.claude/session-data/
+   No session files found in ~/fundswap_github/knowledge-wiki/plans/active/ (repo: <name>) or ~/.claude/session-data/
    Run /save-session at the end of a session to create one.
    ```
    Then stop.
 
 If an argument is provided:
 
-- If it looks like a date (`YYYY-MM-DD`), search `~/.claude/session-data/` first, then the legacy
-  `~/.claude/sessions/`, for files matching `YYYY-MM-DD-session.tmp` (legacy format) or
-  `YYYY-MM-DD-<shortid>-session.tmp` (current format)
-  and load the most recently modified variant for that date
-- If it looks like a file path, read that file directly
+- If it looks like a file path (absolute, or contains `/`), read that file directly regardless of which store it's in
+- If it looks like a date (`YYYY-MM-DD`), search knowledge-wiki `plans/active/` (files starting with that date) first, then `~/.claude/session-data/`, then the legacy `~/.claude/sessions/`, for a matching file and load the most recently modified variant for that date
 - If not found, report clearly and stop
+
+**Note on format**: knowledge-wiki plan files use a different section structure (frontmatter `title/date/repo/status`, then freeform headings like 為什麼做/已確認可行/沒有成功的做法/待解決的問題/精確的下一步) than the legacy `-session.tmp` template (WHAT WORKED / WHAT DID NOT WORK / etc). Both map to the same underlying categories — synthesize the Step 3 briefing from whichever structure the loaded file actually uses; do not require the exact English headers to be present.
 
 ### Step 2: Read the entire session file
 
